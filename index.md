@@ -156,6 +156,7 @@ title: Greek Morphology + Ending Filter
         <option value="bars">Bars</option>
         <option value="percent">Percent bars</option>
         <option value="table">Compact table</option>
+        <option value="dot">Dot plot</option>
       </select>
     </div>
   </div>
@@ -180,6 +181,8 @@ title: Greek Morphology + Ending Filter
         <option value="valueCounts">Value counts (one column)</option>
         <option value="crossTab">Cross-tab (two columns)</option>
         <option value="missingness">Missingness report</option>
+        <option value="distinctness">Distinctness report</option>
+        <option value="lengthProfile">Token length profile</option>
       </select>
     </div>
     <div class="field">

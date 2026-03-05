@@ -467,9 +467,9 @@
 
     const map = new Map();
     for (const r of rows) {
-      const p = normStr(r[primary]) || "(blank)";
+      const pVal = normStr(r[primary]) || "(blank)";
       const sVal = secondary ? (normStr(r[secondary]) || "(blank)") : null;
-      const key = secondary ? `${p} ⟶ ${sVal}` : p;
+      const key = secondary ? `${pVal} ⟶ ${sVal}` : pVal;
       map.set(key, (map.get(key) || 0) + 1);
     }
 
@@ -481,6 +481,7 @@
 
     const topN = Math.max(1, Number.parseInt(el.vizTopN.value, 10) || 20);
     entries = entries.slice(0, topN);
+    const total = entries.reduce((a, b) => a + b[1], 0) || 1;
     const max = Math.max(...entries.map(x => x[1]), 1);
     const vizType = el.vizType.value;
 
@@ -488,13 +489,16 @@
 
     if (vizType === "table") {
       html += `<table class="mini-table"><thead><tr><th>Category</th><th>Count</th><th>Percent</th></tr></thead><tbody>`;
-      const total = entries.reduce((a, b) => a + b[1], 0) || 1;
       for (const [label, value] of entries) {
         html += `<tr><td>${escapeHtml(label)}</td><td>${value}</td><td>${((value/total)*100).toFixed(2)}%</td></tr>`;
       }
       html += `</tbody></table>`;
+    } else if (vizType === "dot") {
+      for (const [label, value] of entries) {
+        const pct = ((value / max) * 100).toFixed(1);
+        html += `<div class="viz-item"><div class="viz-row"><span class="viz-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span><div><span class="viz-dot"></span><span class="small-muted">${pct}% of max</span></div><span class="viz-value">${value}</span></div></div>`;
+      }
     } else {
-      const total = entries.reduce((a, b) => a + b[1], 0) || 1;
       for (const [label, value] of entries) {
         const base = vizType === "percent" ? Math.round((value / total) * 100) : Math.round((value / max) * 100);
         const w = Math.max(2, base);
@@ -502,6 +506,12 @@
         html += `<div class="viz-item"><div class="viz-row"><span class="viz-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span><div class="viz-bar" style="width:${w}%"></div><span class="viz-value">${display}</span></div></div>`;
       }
     }
+
+    html += `<div class="viz-legend"><h4>Label legend</h4><table class="mini-table"><thead><tr><th>Label</th><th>Count</th><th>Percent</th></tr></thead><tbody>`;
+    for (const [label, value] of entries.slice(0, 15)) {
+      html += `<tr><td>${escapeHtml(label)}</td><td>${value}</td><td>${((value/total)*100).toFixed(2)}%</td></tr>`;
+    }
+    html += `</tbody></table></div>`;
 
     el.vizWrap.innerHTML = html;
   }
@@ -541,6 +551,39 @@
       const missing = rows.filter(r => !normStr(r[colA])).length;
       const pct = ((missing / rows.length) * 100).toFixed(2);
       el.analysisWrap.innerHTML = `<div class="analysis-card"><span class="label">Missing in ${escapeHtml(colA)}</span><div class="value">${missing} / ${rows.length} (${pct}%)</div></div>`;
+      return;
+    }
+
+    if (mode === "distinctness") {
+      const values = rows.map(r => normStr(r[colA])).filter(Boolean);
+      const uniq = new Set(values);
+      const ratio = values.length ? ((uniq.size / values.length) * 100).toFixed(2) : "0.00";
+      el.analysisWrap.innerHTML = `<div class="analysis-grid">
+        <div class="analysis-card"><span class="label">Column</span><div class="value">${escapeHtml(colA)}</div></div>
+        <div class="analysis-card"><span class="label">Non-empty values</span><div class="value">${values.length}</div></div>
+        <div class="analysis-card"><span class="label">Distinct values</span><div class="value">${uniq.size}</div></div>
+        <div class="analysis-card"><span class="label">Distinctness</span><div class="value">${ratio}%</div></div>
+      </div>`;
+      return;
+    }
+
+    if (mode === "lengthProfile") {
+      const lengths = rows.map(r => normStr(r[colA]).length).filter(n => n > 0);
+      if (!lengths.length) {
+        el.analysisWrap.innerHTML = `<div class="small-muted">No non-empty values found in ${escapeHtml(colA)}.</div>`;
+        return;
+      }
+      lengths.sort((a,b)=>a-b);
+      const avg = (lengths.reduce((a,b)=>a+b,0)/lengths.length).toFixed(2);
+      const min = lengths[0];
+      const max = lengths[lengths.length-1];
+      const med = lengths[Math.floor(lengths.length/2)];
+      el.analysisWrap.innerHTML = `<div class="analysis-grid">
+        <div class="analysis-card"><span class="label">Column</span><div class="value">${escapeHtml(colA)}</div></div>
+        <div class="analysis-card"><span class="label">Min length</span><div class="value">${min}</div></div>
+        <div class="analysis-card"><span class="label">Median length</span><div class="value">${med}</div></div>
+        <div class="analysis-card"><span class="label">Max length</span><div class="value">${max}</div></div>
+      </div><div class="analysis-card" style="margin-top:.55rem;"><span class="label">Average length</span><div class="value">${avg}</div></div>`;
       return;
     }
 
@@ -676,6 +719,9 @@
   el.vizPrimary.addEventListener("change", () => { el.btnViz.disabled = !el.vizPrimary.value; });
   el.vizType.addEventListener("change", renderVisualization);
   el.vizSort.addEventListener("change", renderVisualization);
+  el.vizTopN.addEventListener("input", renderVisualization);
+  el.vizSecondary.addEventListener("change", renderVisualization);
+  el.vizPrimary.addEventListener("change", renderVisualization);
   el.btnViz.addEventListener("click", renderVisualization);
   el.analysisType.addEventListener("change", runAnalysis);
   el.analysisColA.addEventListener("change", runAnalysis);

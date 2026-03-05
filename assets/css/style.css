@@ -72,8 +72,8 @@ table.preview th { position: sticky; top: 0; background: #f8fafc; z-index: 1; }
 
 .viz-wrap { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: .8rem; min-height: 160px; }
 .viz-item { margin-bottom: .45rem; }
-.viz-row { display: grid; grid-template-columns: minmax(120px, 220px) 1fr auto; gap: .55rem; align-items: center; }
-.viz-label { color: #374151; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viz-row { display: grid; grid-template-columns: minmax(180px, 360px) 1fr auto; gap: .55rem; align-items: center; }
+.viz-label { color: #374151; font-size: .88rem; overflow: visible; white-space: normal; word-break: break-word; line-height: 1.25; }
 .viz-bar { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #4f46e5, #38bdf8); }
 .viz-value { font-weight: 600; font-size: .85rem; }
 
@@ -85,3 +85,7 @@ table.preview th { position: sticky; top: 0; background: #f8fafc; z-index: 1; }
 .mini-table { width: 100%; border-collapse: collapse; margin-top: .55rem; font-size: .85rem; }
 .mini-table th, .mini-table td { border-bottom: 1px solid #eef2f7; text-align: left; padding: .35rem; }
 .mini-table th { background: #f8fafc; }
+
+.viz-legend { margin-top: .7rem; border-top: 1px dashed #dbe5f0; padding-top: .55rem; }
+.viz-legend h4 { margin: 0 0 .4rem; font-size: .86rem; color: #334155; }
+.viz-dot { width: 10px; height: 10px; border-radius: 999px; background: #4f46e5; display: inline-block; margin-right: .5rem; }
