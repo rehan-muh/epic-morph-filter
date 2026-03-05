@@ -1,0 +1,5 @@
+title: Greek Morphology + Ending Filter
+description: Lightweight CSV morphology/ending filter (client-side)
+markdown: kramdown
+theme: null
+plugins: []
