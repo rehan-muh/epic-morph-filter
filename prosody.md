@@ -19,8 +19,7 @@ section: prosody
       <select id="prosodyPreset">
         <option value="">Custom / none</option>
         <option value="hex">Dactylic hexameter</option>
-        <option value="pent">Elegiac pentameter (approx.)</option>
-        <option value="iamb">Iambic trimeter (approx.)</option>
+        
       </select>
     </div>
     <div class="field startup-actions">

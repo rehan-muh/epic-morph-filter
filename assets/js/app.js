@@ -45,6 +45,10 @@
   function safeSlug(s) { return String(s ?? "").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "") || "filtered"; }
   function parseCsvList(s) { return String(s ?? "").split(",").map(x => x.trim()).filter(Boolean); }
 
+  function resolveAssetUrl(path) {
+    try { return new URL(path, document.baseURI).toString(); } catch { return path; }
+  }
+
   function stripGreekDiacritics(s) {
     s = String(s ?? "").trim().normalize("NFD").replace(/\p{M}/gu, "").normalize("NFC").toLowerCase();
     return s.replace(/[ \t\r\n]+/g, "").replace(/[·.,;:!?"'“”‘’)\]}]+$/g, "");
@@ -768,11 +772,12 @@
 
     el.loadStatus.textContent = `Loading bundled CSV from ${selectedUrl} ...`;
     try {
-      const res = await fetch(selectedUrl, { cache: "no-store" });
+      const resolvedUrl = resolveAssetUrl(selectedUrl);
+      const res = await fetch(resolvedUrl, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       parseAndLoadCsv(text, selectedUrl, true);
-      status(`Loaded bundled CSV: ${selectedUrl}`);
+      status(`Loaded bundled CSV: ${resolvedUrl}`);
     } catch (err) {
       el.loadStatus.textContent = "Bundled CSV not found.";
       status(`Could not load bundled CSV at '${selectedUrl}'.
