@@ -318,3 +318,30 @@ table.preview th { position: sticky; top: 0; background: #f8fafc; z-index: 1; }
 }
 .zoom-body { padding: .75rem; overflow: auto; }
 .zoom-body .cluster-svg { min-width: 980px; }
+
+
+textarea.big-textarea {
+  width: 100%;
+  min-height: 170px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: .62rem .72rem;
+  background: rgba(255,255,255,.96);
+  color: var(--text);
+  font: 15px/1.5 "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+}
+textarea.big-textarea:focus {
+  outline: 2px solid #c7d2fe;
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, .1);
+}
+
+#syntaxPhrase {
+  white-space: pre;
+  overflow: auto;
+}
+
+#prosodyAlignment td,
+#syntaxTable td {
+  vertical-align: top;
+}

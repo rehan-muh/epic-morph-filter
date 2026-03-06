@@ -36,11 +36,13 @@
     {{ content }}
   </main>
 
-  {% if page.section == 'morphology' or page.section == 'clustering' %}
+  {% if page.section == 'morphology' or page.section == 'clustering' or page.section == 'syntax' or page.section == 'prosody' %}
   <!-- Lightweight CSV parser -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   {% if page.section == "morphology" %}<script src="{{ '/assets/js/app.js' | relative_url }}"></script>{% endif %}
   {% if page.section == "clustering" %}<script src="{{ '/assets/js/clustering.js' | relative_url }}"></script>{% endif %}
+  {% if page.section == "syntax" %}<script src="{{ '/assets/js/syntax.js' | relative_url }}"></script>{% endif %}
+  {% if page.section == "prosody" %}<script src="{{ '/assets/js/prosody.js' | relative_url }}"></script>{% endif %}
   {% endif %}
 </body>
 </html>
