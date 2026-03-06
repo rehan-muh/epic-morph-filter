@@ -17,7 +17,7 @@
     voice: { a: "active", e: "mediopassive", m: "middle", p: "passive" }
   };
 
-  const state = { rawRows: [], columns: [], morphCols: [], morphOrder: [], dropdowns: {}, updatingWidgets: false, dfMorph: null, dfFinal: null, requirePosFirst: true, fileName: null };
+  const state = { rawRows: [], columns: [], morphCols: [], morphOrder: [], dropdowns: {}, updatingWidgets: false, dfMorph: null, dfFinal: null, requirePosFirst: true, fileName: null, activePanel: "analysis" };
 
   const el = {
     csvFile: byId("csvFile"), loadStatus: byId("loadStatus"), morphControls: byId("morphControls"), autoLockSingletons: byId("autoLockSingletons"),
@@ -29,6 +29,11 @@
     startupSavedDatasets: byId("startupSavedDatasets"), btnStartupLoad: byId("btnStartupLoad"), vizDataset: byId("vizDataset"), vizPrimary: byId("vizPrimary"), vizSecondary: byId("vizSecondary"),
     vizTopN: byId("vizTopN"), vizSort: byId("vizSort"), vizType: byId("vizType"), btnViz: byId("btnViz"), vizWrap: byId("vizWrap"),
     analysisType: byId("analysisType"), analysisColA: byId("analysisColA"), analysisColB: byId("analysisColB"), btnRunAnalysis: byId("btnRunAnalysis"), analysisWrap: byId("analysisWrap"),
+    panelTabs: Array.from(document.querySelectorAll("[data-panel-tab]")),
+    panelCards: Array.from(document.querySelectorAll("[data-panel]")),
+    clusterDataset: byId("clusterDataset"), clusterBookCol: byId("clusterBookCol"), clusterFeatureMode: byId("clusterFeatureMode"),
+    clusterTokenCol: byId("clusterTokenCol"), clusterNgram: byId("clusterNgram"), clusterThreshold: byId("clusterThreshold"),
+    clusterTopFeatures: byId("clusterTopFeatures"), btnRunClustering: byId("btnRunClustering"), clusterWrap: byId("clusterWrap"),
     btnLoadBundled: byId("btnLoadBundled"),
     bundledDatasetChoice: byId("bundledDatasetChoice")
   };
@@ -460,6 +465,7 @@
     }
     el.btnViz.disabled = !(rows.length && el.vizPrimary.value);
     el.btnRunAnalysis.disabled = !rows.length;
+    populateClusterControls();
   }
 
   function renderVisualization() {
@@ -520,6 +526,163 @@
     html += `</tbody></table></div>`;
 
     el.vizWrap.innerHTML = html;
+  }
+
+
+  function getRowsForDataset(datasetName) {
+    if (datasetName === "morph") return state.dfMorph || [];
+    if (datasetName === "final") return state.dfFinal || [];
+    return state.rawRows || [];
+  }
+
+  function setActivePanel(panelName) {
+    state.activePanel = panelName;
+    for (const tab of el.panelTabs) tab.classList.toggle("is-active", tab.dataset.panelTab === panelName);
+    for (const card of el.panelCards) {
+      const active = card.dataset.panel === panelName;
+      card.classList.toggle("is-active", active);
+      card.hidden = !active;
+    }
+  }
+
+  function populateClusterControls() {
+    const rows = getRowsForDataset(el.clusterDataset?.value || "raw");
+    const cols = rows.length ? Object.keys(rows[0]) : [];
+    const guessBook = cols.find(c => c.toLowerCase() === "book") || cols.find(c => c.toLowerCase().includes("book")) || "";
+    const guessToken = cols.find(c => c.toLowerCase() === "lemma") || cols.find(c => c.toLowerCase() === "form") || cols[0] || "";
+
+    for (const [select, guess] of [[el.clusterBookCol, guessBook], [el.clusterTokenCol, guessToken]]) {
+      const cur = select.value;
+      select.innerHTML = "";
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "Choose column...";
+      select.appendChild(blank);
+      for (const c of cols) {
+        const o = document.createElement("option");
+        o.value = c;
+        o.textContent = c;
+        select.appendChild(o);
+      }
+      if (cols.includes(cur)) select.value = cur;
+      else if (guess && cols.includes(guess)) select.value = guess;
+      select.disabled = !cols.length;
+    }
+
+    const collocationMode = (el.clusterFeatureMode?.value || "column") === "collocation";
+    el.clusterNgram.disabled = !collocationMode;
+    el.btnRunClustering.disabled = !(rows.length && el.clusterBookCol.value && el.clusterTokenCol.value);
+  }
+
+  function buildCollocations(tokens, n) {
+    const grams = [];
+    if (n <= 1 || tokens.length < n) return grams;
+    for (let i = 0; i <= tokens.length - n; i++) grams.push(tokens.slice(i, i + n).join(" ␠ "));
+    return grams;
+  }
+
+  function jaccard(a, b) {
+    if (!a.size && !b.size) return 0;
+    let inter = 0;
+    for (const x of a) if (b.has(x)) inter += 1;
+    const union = a.size + b.size - inter;
+    return union ? (inter / union) : 0;
+  }
+
+  function runClustering() {
+    const datasetName = el.clusterDataset.value;
+    const rows = getRowsForDataset(datasetName);
+    const bookCol = el.clusterBookCol.value;
+    const tokenCol = el.clusterTokenCol.value;
+    const mode = el.clusterFeatureMode.value;
+    const ngram = Math.max(1, Number.parseInt(el.clusterNgram.value, 10) || 2);
+    const threshold = Math.min(1, Math.max(0, Number.parseFloat(el.clusterThreshold.value) || 0.2));
+    const topFeatures = Math.max(1, Number.parseInt(el.clusterTopFeatures.value, 10) || 80);
+
+    if (!rows.length) {
+      el.clusterWrap.innerHTML = `<div class="small-muted">No rows available for clustering.</div>`;
+      return;
+    }
+    if (!bookCol || !tokenCol) {
+      el.clusterWrap.innerHTML = `<div class="small-muted">Choose a book column and a feature/token column.</div>`;
+      return;
+    }
+
+    const byBook = new Map();
+    for (const row of rows) {
+      const book = normStr(row[bookCol]);
+      const token = normStr(row[tokenCol]);
+      if (!book || !token) continue;
+      if (!byBook.has(book)) byBook.set(book, []);
+      byBook.get(book).push(token);
+    }
+
+    const bookFeatureSets = new Map();
+    for (const [book, tokens] of byBook.entries()) {
+      const rawFeatures = mode === "collocation" ? buildCollocations(tokens, ngram) : tokens;
+      const freq = new Map();
+      for (const feature of rawFeatures) freq.set(feature, (freq.get(feature) || 0) + 1);
+      const top = [...freq.entries()].sort((a,b)=>b[1]-a[1]).slice(0, topFeatures).map(x=>x[0]);
+      bookFeatureSets.set(book, new Set(top));
+    }
+
+    const books = [...bookFeatureSets.keys()].sort((a,b)=>a.localeCompare(b, undefined, {numeric:true}));
+    const edges = [];
+    for (let i = 0; i < books.length; i++) {
+      for (let j = i + 1; j < books.length; j++) {
+        const a = books[i], b = books[j];
+        const score = jaccard(bookFeatureSets.get(a), bookFeatureSets.get(b));
+        if (score >= threshold) edges.push([a, b, score]);
+      }
+    }
+
+    const parent = new Map(books.map(b => [b, b]));
+    function find(x) {
+      let p = parent.get(x);
+      while (p !== parent.get(p)) p = parent.get(p);
+      let cur = x;
+      while (parent.get(cur) !== p) {
+        const nxt = parent.get(cur);
+        parent.set(cur, p);
+        cur = nxt;
+      }
+      return p;
+    }
+    function unite(a, b) {
+      const pa = find(a), pb = find(b);
+      if (pa !== pb) parent.set(pb, pa);
+    }
+    for (const [a, b] of edges) unite(a, b);
+
+    const clusters = new Map();
+    for (const b of books) {
+      const root = find(b);
+      if (!clusters.has(root)) clusters.set(root, []);
+      clusters.get(root).push(b);
+    }
+
+    const clusterRows = [...clusters.values()].sort((a,b)=>b.length-a.length || a[0].localeCompare(b[0]));
+    let html = `<div class="small-muted">${books.length} books clustered from <strong>${escapeHtml(datasetName)}</strong> dataset using <strong>${escapeHtml(mode === "collocation" ? `${ngram}-gram collocations from ${tokenCol}` : tokenCol)}</strong>. Threshold = ${threshold.toFixed(2)}.</div>`;
+    html += `<div class="analysis-grid" style="margin-top:.55rem; grid-template-columns: repeat(3, minmax(140px, 1fr));">
+      <div class="analysis-card"><span class="label">Books considered</span><div class="value">${books.length}</div></div>
+      <div class="analysis-card"><span class="label">Similarity links</span><div class="value">${edges.length}</div></div>
+      <div class="analysis-card"><span class="label">Clusters</span><div class="value">${clusterRows.length}</div></div>
+    </div>`;
+
+    html += `<table class="mini-table"><thead><tr><th>Cluster</th><th>Books</th><th>Size</th></tr></thead><tbody>`;
+    clusterRows.forEach((cluster, idx) => {
+      html += `<tr><td>C${idx+1}</td><td>${escapeHtml(cluster.join(", "))}</td><td>${cluster.length}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+
+    const topEdges = edges.sort((a,b)=>b[2]-a[2]).slice(0, 20);
+    if (topEdges.length) {
+      html += `<div class="small-muted" style="margin-top:.6rem;">Top similarity links</div><table class="mini-table"><thead><tr><th>Book A</th><th>Book B</th><th>Jaccard</th></tr></thead><tbody>`;
+      for (const [a, b, score] of topEdges) html += `<tr><td>${escapeHtml(a)}</td><td>${escapeHtml(b)}</td><td>${score.toFixed(3)}</td></tr>`;
+      html += `</tbody></table>`;
+    }
+
+    el.clusterWrap.innerHTML = html;
   }
 
 
@@ -758,10 +921,18 @@ Error: ${String(err)}`);
   el.analysisColA.addEventListener("change", runAnalysis);
   el.analysisColB.addEventListener("change", runAnalysis);
   el.btnRunAnalysis.addEventListener("click", runAnalysis);
+  for (const tab of el.panelTabs) tab.addEventListener("click", () => setActivePanel(tab.dataset.panelTab));
+  el.clusterDataset.addEventListener("change", populateClusterControls);
+  el.clusterFeatureMode.addEventListener("change", populateClusterControls);
+  el.clusterBookCol.addEventListener("change", populateClusterControls);
+  el.clusterTokenCol.addEventListener("change", populateClusterControls);
+  el.btnRunClustering.addEventListener("click", runClustering);
 
   refreshSavedDatasetSelects();
   updateButtonStates();
   updateStats();
   renderVisualization();
   runAnalysis();
+  setActivePanel("analysis");
+  populateClusterControls();
 })();
