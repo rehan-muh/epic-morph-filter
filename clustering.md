@@ -12,7 +12,7 @@ section: clustering
 
 <div class="card">
   <h2>1. Load dataset</h2>
-  <div class="grid-2">
+  <div class="grid-3">
     <div class="field">
       <label for="clusterCsvFile"><strong>CSV file</strong></label>
       <input id="clusterCsvFile" type="file" accept=".csv,text/csv" />
@@ -24,6 +24,11 @@ section: clustering
         <option value="default2.csv">default2.csv (Entire Greek corpus)</option>
       </select>
       <div class="btn-row" style="margin-top:.35rem;"><button id="btnClusterLoadBundled" class="btn">Load bundled CSV</button></div>
+    </div>
+    <div class="field">
+      <label for="clusterSharedDataset"><strong>From Morphology filters</strong></label>
+      <select id="clusterSharedDataset"></select>
+      <div class="btn-row" style="margin-top:.35rem;"><button id="btnClusterLoadShared" class="btn">Load selected filtered dataset</button></div>
     </div>
   </div>
   <div id="clusterLoadStatus" class="status muted">No clustering dataset loaded yet.</div>

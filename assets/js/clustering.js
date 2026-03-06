@@ -3,6 +3,7 @@
     "default.csv": "assets/data/default.csv",
     "default2.csv": "assets/data/default2.csv"
   };
+  const SHARED_CLUSTER_SOURCE_KEY = "gmf_clustering_sources_v1";
 
   const state = {
     rawRows: [],
@@ -14,6 +15,8 @@
     clusterCsvFile: byId("clusterCsvFile"),
     clusterBundledDataset: byId("clusterBundledDataset"),
     btnClusterLoadBundled: byId("btnClusterLoadBundled"),
+    clusterSharedDataset: byId("clusterSharedDataset"),
+    btnClusterLoadShared: byId("btnClusterLoadShared"),
     clusterLoadStatus: byId("clusterLoadStatus"),
     clusterBookCol: byId("clusterBookCol"),
     clusterTokenCol: byId("clusterTokenCol"),
@@ -42,6 +45,43 @@
 
   function setStatus(msg) { el.clusterLoadStatus.textContent = msg; }
 
+
+  function readSharedSources() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SHARED_CLUSTER_SOURCE_KEY) || "{}");
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function refreshSharedSourceSelect() {
+    const payload = readSharedSources();
+    const names = Object.keys(payload).sort();
+    el.clusterSharedDataset.innerHTML = "";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = names.length ? "Choose shared filtered dataset..." : "No filtered datasets shared from morphology yet";
+    el.clusterSharedDataset.appendChild(blank);
+    for (const name of names) {
+      const o = document.createElement("option");
+      o.value = name;
+      const rowCount = payload[name]?.rowCount || 0;
+      o.textContent = `${name} • ${rowCount} rows`;
+      el.clusterSharedDataset.appendChild(o);
+    }
+    el.btnClusterLoadShared.disabled = !names.length;
+  }
+
+  function loadSharedDataset() {
+    const slot = el.clusterSharedDataset.value;
+    if (!slot) return;
+    const item = readSharedSources()[slot];
+    if (!item?.csv) return setStatus(`Shared dataset '${slot}' is missing or invalid.`);
+    parseCsv(item.csv, `${slot}.csv`);
+    setStatus(`Loaded shared filtered dataset '${slot}' (${item.rowCount || 0} rows).`);
+  }
+
   function parseCsv(text, fileName = "uploaded.csv") {
     setStatus(`Loading ${fileName} ...`);
     Papa.parse(text, {
@@ -54,6 +94,7 @@
         setStatus(`Loaded ${fileName} with ${state.rawRows.length} rows.`);
         populateColumns();
         resetOutputs();
+        setupZoomButtons();
       },
       error: (err) => setStatus(`CSV parse error: ${String(err)}`)
     });
@@ -511,6 +552,7 @@
     renderHeatmap(D, books, labels);
     renderNetwork(D, books, labels, threshold);
     renderFeatureSignatures(clusters, X, terms, books, labels, topFeatures);
+    setupZoomButtons();
   }
 
   function renderMds(coords, books, labels) {
@@ -603,6 +645,42 @@
     el.clusterFeatures.innerHTML = html;
   }
 
+
+
+  function setupZoomButtons() {
+    const containers = document.querySelectorAll(".viz-wrap, #clusterSummary");
+    for (const c of containers) {
+      if (c.querySelector(":scope > .zoom-btn")) continue;
+      c.classList.add("zoomable");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "zoom-btn";
+      b.textContent = "⤢ Full view";
+      b.addEventListener("click", () => openZoom(c));
+      c.prepend(b);
+    }
+  }
+
+  function openZoom(container) {
+    let modal = document.getElementById("zoomModal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "zoomModal";
+      modal.className = "zoom-modal";
+      modal.innerHTML = `<div class="zoom-backdrop"></div><div class="zoom-dialog"><div class="zoom-head"><strong>Expanded graphic</strong><button type="button" class="btn btn-warn zoom-close">Close</button></div><div class="zoom-body"></div></div>`;
+      document.body.appendChild(modal);
+      modal.querySelector(".zoom-backdrop").addEventListener("click", () => modal.classList.remove("open"));
+      modal.querySelector(".zoom-close").addEventListener("click", () => modal.classList.remove("open"));
+    }
+    const body = modal.querySelector(".zoom-body");
+    body.innerHTML = "";
+    const clone = container.cloneNode(true);
+    const btn = clone.querySelector(".zoom-btn");
+    if (btn) btn.remove();
+    body.appendChild(clone);
+    modal.classList.add("open");
+  }
+
   async function loadBundled() {
     const choice = el.clusterBundledDataset.value;
     const url = BUNDLED_DATASET_URLS[choice];
@@ -622,9 +700,13 @@
     f.text().then(txt => parseCsv(txt, f.name));
   });
   el.btnClusterLoadBundled.addEventListener("click", loadBundled);
+  el.btnClusterLoadShared.addEventListener("click", loadSharedDataset);
   [el.clusterBookCol, el.clusterTokenCol, el.clusterFeatureMode, el.clusterMethod].forEach(x => x.addEventListener("change", syncControlStates));
   el.btnRunCluster.addEventListener("click", run);
+  window.addEventListener("focus", refreshSharedSourceSelect);
 
+  refreshSharedSourceSelect();
   syncControlStates();
   resetOutputs();
+  setupZoomButtons();
 })();
