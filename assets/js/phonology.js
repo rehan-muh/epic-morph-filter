@@ -206,15 +206,40 @@
     modal.classList.add('open');
   }
 
-  async function loadBundled() {
+  async function fetchBundledCsv(path) {
+    const variants = [
+      path,
+      new URL(path, document.baseURI).toString(),
+      path.startsWith('/') ? path : `/${path}`,
+      path.startsWith('./') ? path.slice(2) : `./${path}`
+    ];
+    let lastErr = null;
+    for (const candidate of [...new Set(variants)]) {
+      try {
+        const res = await fetch(candidate, { cache: 'no-store' });
+        if (res.ok) return { text: await res.text(), url: candidate };
+        lastErr = new Error(`HTTP ${res.status} @ ${candidate}`);
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr || new Error(`Could not load bundled csv at ${path}`);
+  }
+
+  async function loadBundled(autoRun = false) {
     const path = BUNDLED[el.phonBundledDataset.value];
     if (!path) return;
-    const url = new URL(path, document.baseURI).toString();
-    try { const res = await fetch(url,{cache:'no-store'}); if(!res.ok) throw new Error(`HTTP ${res.status}`); parseCsv(await res.text(), path); }
-    catch (err) { el.phonLoadStatus.textContent = `Could not load bundled dataset (${String(err)})`; }
+    try {
+      const loaded = await fetchBundledCsv(path);
+      parseCsv(loaded.text, loaded.url);
+      if (autoRun) setTimeout(() => { if (!el.btnRunPhon.disabled) run(); }, 0);
+    } catch (err) {
+      el.phonLoadStatus.textContent = `Could not load bundled dataset (${String(err)})`;
+    }
   }
 
   el.phonCsvFile.addEventListener('change',e=>{ const f=e.target.files?.[0]; if(f) f.text().then(t=>parseCsv(t,f.name)); });
-  el.btnPhonLoadBundled.addEventListener('click', loadBundled);
+  el.btnPhonLoadBundled.addEventListener('click', () => loadBundled(false));
   el.btnRunPhon.addEventListener('click', run);
+  loadBundled(true);
 })();
