@@ -739,6 +739,10 @@
           const autoSaved = saveDataset(LAST_AUTO_SLOT);
           if (autoSaved) el.startupSavedDatasets.value = LAST_AUTO_SLOT;
         }
+      }
+      cells.push(cur);
+      return cells;
+    };
 
         if (!state.morphCols.length) {
           status(`No expected morphology columns found.
@@ -750,18 +754,30 @@ Columns present: ${cols.join(", ")}`);
           return;
         }
 
-        state.morphOrder = [...PREFERRED_MORPH_COLS.filter(c => state.morphCols.includes(c)), ...state.morphCols.filter(c => !PREFERRED_MORPH_COLS.includes(c))];
-        state.requirePosFirst = state.morphOrder.includes("pos");
+  function parseAndLoadCsv(text, fileName = "uploaded.csv", fromSaved = false) {
+    state.fileName = fileName;
+    setLoadingStatus(el.loadStatus, `Loading ${fileName} ...`);
 
-        buildMorphControls();
-        populateFormColumnSelect();
-        state.dfMorph = null;
-        state.dfFinal = null;
+    parseCsvText(text).then((res) => {
+      el.loadStatus.classList.remove("loading-note");
+      el.loadStatus.textContent = res.errors?.length ? `Loaded with ${res.errors.length} parse warning(s).` : `Loaded ${fileName}${fromSaved ? " (saved dataset)" : ""}`;
+      const rows = (res.data || []).map((r, i) => ({ ...r, _row_order: i }));
+      const cols = res.meta?.fields || (rows[0] ? Object.keys(rows[0]) : []);
+      state.rawRows = rows;
+      state.columns = cols;
+      saveClusterSource("raw_loaded", rows);
+      state.morphCols = PREFERRED_MORPH_COLS.filter(c => cols.includes(c));
 
-        refreshConstraintDropdowns();
-        applyDefaultsSequentially();
-        refreshConstraintDropdowns();
-        showConstraintStatus();
+      if (!fromSaved && rows.length) {
+        const autoSaved = saveDataset(LAST_AUTO_SLOT);
+        if (autoSaved) el.startupSavedDatasets.value = LAST_AUTO_SLOT;
+      }
+
+      if (!state.morphCols.length) {
+        status(`No expected morphology columns found.
+Expected any of: ${PREFERRED_MORPH_COLS.join(", ")}
+Columns present: ${cols.join(", ")}`);
+        renderTable(rows, 15);
         updateButtonStates();
         updateStats();
 
@@ -778,6 +794,33 @@ Detected columns:
         el.loadStatus.textContent = "Failed to parse CSV.";
         status(`CSV parse error: ${String(err)}`);
       }
+
+      state.morphOrder = [...PREFERRED_MORPH_COLS.filter(c => state.morphCols.includes(c)), ...state.morphCols.filter(c => !PREFERRED_MORPH_COLS.includes(c))];
+      state.requirePosFirst = state.morphOrder.includes("pos");
+
+      buildMorphControls();
+      populateFormColumnSelect();
+      state.dfMorph = null;
+      state.dfFinal = null;
+
+      refreshConstraintDropdowns();
+      applyDefaultsSequentially();
+      refreshConstraintDropdowns();
+      showConstraintStatus();
+      updateButtonStates();
+      updateStats();
+
+      const formCandidates = getFormCandidates(cols);
+      status(`Rows in analysis: ${rows.length}
+Detected columns:
+  morph: ${state.morphCols.join(", ")}
+  form candidates: ${formCandidates.length ? formCandidates.join(", ") : "(none obvious)"}
+  selected form column: ${el.formCol.value || "(none)"}`);
+      renderTable(rows, 15);
+    }).catch((err) => {
+      el.loadStatus.classList.remove("loading-note");
+      el.loadStatus.textContent = "Failed to parse CSV.";
+      status(`CSV parse error: ${String(err)}`);
     });
   }
 
@@ -869,6 +912,17 @@ Add the file there or update BUNDLED_DATASET_URLS in assets/js/app.js.`);
     if (btn) btn.remove();
     body.appendChild(clone);
     modal.classList.add("open");
+  }
+
+  function readFileText(file) {
+    if (!file) return Promise.reject(new Error("No file selected."));
+    if (typeof file.text === "function") return file.text();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(reader.error || new Error("Could not read file."));
+      reader.readAsText(file);
+    });
   }
 
   function onFileChosen(file) {
