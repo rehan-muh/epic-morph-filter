@@ -720,9 +720,16 @@
       dynamicTyping: false,
       complete: (res) => {
         el.loadStatus.classList.remove("loading-note");
+        const fields = res.meta?.fields || [];
+        const lfsPointer = fields.length === 1 && String(fields[0] || "").startsWith("version https://git-lfs.github.com/spec/v1");
+        if (lfsPointer) {
+          el.loadStatus.textContent = `Loaded ${fileName}, but it is a Git LFS pointer file.`;
+          status(`The selected file appears to be a Git LFS pointer and not CSV data.`);
+          return;
+        }
         el.loadStatus.textContent = res.errors?.length ? `Loaded with ${res.errors.length} parse warning(s).` : `Loaded ${fileName}${fromSaved ? " (saved dataset)" : ""}`;
         const rows = (res.data || []).map((r, i) => ({ ...r, _row_order: i }));
-        const cols = res.meta?.fields || (rows[0] ? Object.keys(rows[0]) : []);
+        const cols = fields.length ? fields : (rows[0] ? Object.keys(rows[0]) : []);
         state.rawRows = rows;
         state.columns = cols;
         saveClusterSource("raw_loaded", rows);
@@ -734,7 +741,9 @@
         }
 
         if (!state.morphCols.length) {
-          status(`No expected morphology columns found.\nExpected any of: ${PREFERRED_MORPH_COLS.join(", ")}\nColumns present: ${cols.join(", ")}`);
+          status(`No expected morphology columns found.
+Expected any of: ${PREFERRED_MORPH_COLS.join(", ")}
+Columns present: ${cols.join(", ")}`);
           renderTable(rows, 15);
           updateButtonStates();
           updateStats();
@@ -757,7 +766,11 @@
         updateStats();
 
         const formCandidates = getFormCandidates(cols);
-        status(`Rows in analysis: ${rows.length}\nDetected columns:\n  morph: ${state.morphCols.join(", ")}\n  form candidates: ${formCandidates.length ? formCandidates.join(", ") : "(none obvious)"}\n  selected form column: ${el.formCol.value || "(none)"}`);
+        status(`Rows in analysis: ${rows.length}
+Detected columns:
+  morph: ${state.morphCols.join(", ")}
+  form candidates: ${formCandidates.length ? formCandidates.join(", ") : "(none obvious)"}
+  selected form column: ${el.formCol.value || "(none)"}`);
         renderTable(rows, 15);
       },
       error: (err) => {
@@ -767,7 +780,6 @@
       }
     });
   }
-
 
 
 
@@ -861,7 +873,14 @@ Add the file there or update BUNDLED_DATASET_URLS in assets/js/app.js.`);
 
   function onFileChosen(file) {
     if (!file) return;
-    file.text().then(text => parseAndLoadCsv(text, file.name, false));
+    setLoadingStatus(el.loadStatus, `Reading ${file.name} ...`);
+    file.text()
+      .then(text => parseAndLoadCsv(text, file.name, false))
+      .catch((err) => {
+        el.loadStatus.classList.remove("loading-note");
+        el.loadStatus.textContent = "Failed to read selected file.";
+        status(`File read error: ${String(err)}`);
+      });
   }
 
   el.csvFile.addEventListener("change", e => onFileChosen(e.target.files?.[0]));
