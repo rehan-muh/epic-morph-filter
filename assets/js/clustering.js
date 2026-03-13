@@ -661,12 +661,12 @@
     const D = pairwiseDistance(X, metric);
     const labels = runMethod(method, D, X, { k, threshold, eps, minPts });
     const coords = classicalMds(D, 2);
-    return { books, labels, D, coords, X, terms, featureByBook, threshold, method, metric, vectorModel, mode, ngramN, topFeatures, k, eps, minPts, excludeFunction, minDf, maxDf };
+    return { books, labels, D, coords, X, terms, featureByBook, threshold, method, metric, vectorModel, mode, ngramN, topFeatures, k, eps, minPts, excludeFunction, minDf, maxDf, rowsUsed: rows.length };
   }
 
 
   function renderAll() {
-    const { books, labels, D, coords, X, terms, threshold, method, metric, vectorModel, mode, ngramN, topFeatures, excludeFunction, minDf, maxDf } = state.run;
+    const { books, labels, D, coords, X, terms, threshold, method, metric, vectorModel, mode, ngramN, topFeatures, excludeFunction, minDf, maxDf, rowsUsed } = state.run;
     const kMap = new Map();
     labels.forEach((lab, i) => {
       if (!kMap.has(lab)) kMap.set(lab, []);
@@ -681,7 +681,7 @@
       <div class="analysis-card"><span class="label">Method</span><div class="value">${esc(method)}</div></div>
       <div class="analysis-card"><span class="label">Distance / Model</span><div class="value">${esc(metric)} / ${esc(vectorModel)}</div></div>
     </div>
-    <div class="small-muted" style="margin-top:.5rem;">Features: ${esc(mode === "collocation" ? `${ngramN}-gram collocations` : "direct tokens")}. Noise points: ${noiseCt}. Stylometry filters: ${excludeFunction ? "exclude function words" : "function words included"}; DF ratio ${minDf.toFixed(2)}–${maxDf.toFixed(2)}. Morph rows used: ${rows.length}.</div>`;
+    <div class="small-muted" style="margin-top:.5rem;">Features: ${esc(mode === "collocation" ? `${ngramN}-gram collocations` : "direct tokens")}. Noise points: ${noiseCt}. Stylometry filters: ${excludeFunction ? "exclude function words" : "function words included"}; DF ratio ${minDf.toFixed(2)}–${maxDf.toFixed(2)}. Morph rows used: ${rowsUsed}.</div>`;
 
     renderMds(coords, books, labels);
     renderBars(clusters, books, labels);
